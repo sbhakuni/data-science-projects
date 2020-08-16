@@ -1,0 +1,533 @@
+---
+output:
+  word_document: default
+  pdf_document: default
+---
+
+# FE590.  Assignment #4.
+
+
+## Enter Your Name Here, or "Anonymous" if you want to remain anonymous..
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+# Instructions
+
+
+When you have completed the assignment, knit the document into a PDF file, and upload _both_ the .pdf and .Rmd files to Canvas.
+
+Note that you must have LaTeX installed in order to knit the equations below.  If you do not have it installed, simply delete the questions below.
+```{r}
+CWID = 10433501 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproduceable nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)
+```
+# Question 1:
+In this assignment, you will be required to find a set of data to run regression on.  This data set should be financial in nature, and of a type that will work with the models we have discussed this semester (hint: we didn't look at time series)  You may not use any of the data sets in the ISLR package that we have been looking at all semester.  Your data set that you choose should have both qualitative and quantitative variables. (or has variables that you can transform)
+
+Provide a description of the data below, where you obtained it, what the variable names are and what it is describing.
+## I have chosen Two seperate dataset for classification and regression and question 1 is explained with the coressponsing questions below.My both dataset has both qualitative and quantitative predictors and number of predictors are a lot.I have chosen bank data(finance) and financial economics as my domain.variable names are shown with the following chunks of code
+# Question 2:
+Pick a quantitative variable and fit at least four different models in order to predict that variable using the other predictors.  Determine which of the models is the best fit.  You will need to provide strong reasons as to why the particular model you chose is the best one.  You will need to confirm the model you have selected provides the best fit and that you have obtained the best version of that particular model (i.e. subset selection or validation for example).  You need to convince the grader that you have chosen the best model.
+```{r}
+set.seed(personal)
+data = read.csv("economic_freedom_index.csv")
+
+# i downloaded my data from https://www.heritage.org/index
+#the data set is a good combination of finance and economic .Also most of the financial data deals with times series so I chose this dataset to do full justice to discussed regression methods.
+#the data deals with various economic indicators and financial terms related to the countries out of which I will try to predict economic free index score
+# i have replaced few rows with most values na and put 0 for index ranking as most of these countries are war torn countries with no economic stability and for the rest we will take mean otherwise our data will might get highly skewd.this is our best bet.
+#I have kept only one categorical variable (Region of the country) because rest doesnt have any significance
+for(i in 1:ncol(data)){
+  data[is.na(data[,i]),i]<-mean(data[,i],na.rm=TRUE)
+}
+dim(data)
+str(data)
+print(paste0("The number of rows in the data set are ", nrow(data)))
+
+print(paste0("The number of columns in the data set are ", ncol(data)))
+
+head(data)# to show column names
+# now we remove unique id and countryname and webname as they are not significant for regression
+data=data[,-1:-3]
+data[,c(2:30)]<-sapply(data[,c(2:30)],as.numeric)
+
+library(corrplot) 
+corrplot(cor(data[,2:30]), method = "circle")
+# we see a lot of correlation this is mailny because the indexes are somewhat correalte
+set.seed(personal) 
+library(caTools)
+set.seed(personal)
+split = sample.split(data$X2019.Score, SplitRatio = 1/5)
+training_set = subset(data, split == FALSE)
+test_set = subset(data, split == TRUE)
+library(leaps)
+p = regsubsets(X2019.Score~., data = data)
+q = regsubsets(X2019.Score~.,data = data, method = "forward") 
+r = regsubsets(X2019.Score~.,data = data, method = "backward") 
+summary(p)#best predictor is word bank ranking through exaushtive
+summary(q)
+summary(q)
+summary(p)[5]#8 predictors show best mallows cp for multiple regression
+model_linear = lm(X2019.Score ~ World.Rank, data = training_set)
+model_multiple = lm(X2019.Score~Property.Rights+Judical.Effectiveness+Tax.Burden+Fiscal.Health+Investment.Freedom+Financial.Freedom+Income.Tax.Rate+Labor.Freedom, data = training_set)
+
+pred_linear = predict(model_linear, newdata = test_set) 
+pred_multiple = predict(model_multiple, newdata = test_set)
+mss_linear = mean((test_set$X2019.Score-pred_linear)^2)
+mss_multiple = mean((test_set$X2019.Score-pred_multiple)^2)
+mss_linear#linear regression shows bad results
+mss_multiple##multiple regression show good results but I feel there is a scope of improvement
+
+#model 3 
+#QDA and LDA is not working fine with my dataset as it has small values and I think that polynomial ,step wise etc model will not work better than my multiple regression model.So we will proceed with random forest
+require(randomForest)
+model_rf = randomForest(X2019.Score ~ ., data = training_set, mtry = 15,importance = TRUE)
+pred_rf = predict(model_rf, test_set)
+RF_MSE<-mean((test_set$X2019.Score - pred_rf)^2)
+RF_MSE# I tried different value of mtry but the best result wasnt nearly close to multiple regression mse.so we will not proceed with this
+importance(model_rf)
+varImpPlot (model_rf )
+
+#model 4
+
+require(gbm)
+lambdas = seq( 0, 0.3, by=0.03 )
+train.errors = rep(NA, length(lambdas))
+test.errors = rep(NA, length(lambdas))
+for (i in 1:length(lambdas)) {
+    model_boost = gbm(X2019.Score ~ ., data =training_set, distribution = "gaussian", 
+        n.trees = 1000, shrinkage = lambdas[i])
+    train.pred = predict(model_boost, training_set, n.trees = 1000)
+    test.pred = predict(model_boost, test_set, n.trees = 1000)
+    train.errors[i] = mean((training_set$X2019.Score - train.pred)^2)
+    test.errors[i] = mean((test_set$X2019.Score - test.pred)^2)
+}
+
+plot(lambdas, test.errors, type = "b", xlab = "Shrinkage", ylab = "Test MSE", 
+    col = "red", pch = 20)
+#the mse is best at lambda= 0.9 but still not near the MSE of Multiple regression .Thus I have decided that Model_multiple is the best
+```
+#Question 3:
+
+Do the same approach as in question 2, but this time for a qualitative variable.
+```{r}
+#Classification-Financial credit risk detection of german bank and with variables consisting of various attributes related to the history of the card holder which can be seen in the names of the columns below
+#datasource UCI repository
+#data was chosen because of the importance in  risk management of bank.It consist of various qualitative and quantitative variables and the data was originally highly unbalanced which is now balanced with 300 default vs 700 not default
+#various analysis of the dataset like the importance of variables etc are done below using different models.
+options(warn=-1)
+warnings=FALSE
+dataset=read.table(file="risk.txt",sep = ",",header = FALSE,stringsAsFactors = FALSE)
+names(dataset)<-c("over_draft", 
+"credit_usage",
+"credit_history", 
+"purpose",
+"current_balance",
+"Average_Credit_Balance", 
+"employment",
+"location",
+"personal_status", 
+"other_parties", 
+"residence_since", 
+"property_magnitude", 
+"cc_age", 
+"other_payment_plans", 
+"housing", 
+"existing_credits", 
+"job",
+"num_dependents", 
+"own_telephone", 
+"foreign_worker", 
+"class"
+)
+sum(dataset$class=="bad")
+#luckily our data is somewhat balanced so we dont need oversampling
+#but we need to take care of the categorical data using factors
+
+unique(dataset[,1], incomparables = FALSE)
+dataset$over_draft=factor(dataset$over_draft,c(level='<0','>=200','0<=X<200','no checking'),
+                          labels=c(1,2,3,4))
+length(unique(dataset[,3], incomparables = FALSE))
+unique(dataset[,3], incomparables = FALSE)
+dataset$credit_history=factor(dataset$credit_history,c(level='critical/other existing credit','existing paid','delayed previously', 'no credits/all paid','all paid'),labels=c(1,2,3,4,5))
+unique(dataset[,4], incomparables = FALSE)
+dataset$purpose=factor(dataset$purpose,c(level='radio/tv','education','furniture/equipment',
+                                         'new car','used car','business' ,'domestic appliance','repairs','other','retraining'),labels=c(1,2,3,4,5,6,7,8,9,10))
+unique(dataset[,6], incomparables = FALSE)
+dataset$Average_Credit_Balance=factor(dataset$Average_Credit_Balance,levels=c('no known savings' ,'<100','500<=X<1000' ,'>=1000','100<=X<500' ),labels=c(1,2,3,4,5))
+unique(dataset[,7], incomparables = FALSE)
+dataset$employment=factor(dataset$employment,levels=c('>=7','1<=X<4','4<=X<7','unemployed','<1'),labels=c(1,2,3,4,5))
+dataset$personal_status<-factor(dataset$personal_status,levels=c('male div/sep', 'female div/dep/mar', 'male single', 'male mar/wid', 'female single'),labels=c(1,2,3,4,5))
+dataset$other_parties<-factor(dataset$other_parties,levels=c('none', 'co applicant', 'guarantor'),labels=c(1,2,3))
+dataset$property_magnitude<-factor(dataset$property_magnitude,levels=c('real estate', 'life insurance', 'car', 'no known property'),labels=c(1,2,3,4))
+dataset$other_payment_plans<-factor(dataset$other_payment_plans,levels=c('bank', 'stores', 'none'),labels=c(1,2,3))
+dataset$housing<-factor(dataset$housing,levels=c('rent', 'own', 'for free'),labels=c(1,2,3))
+dataset$job<-factor(dataset$job,levels=c('unemp/unskilled non res', 'unskilled resident', 'skilled', 'high qualif/self emp/mgmt'),labels=c(1,2,3,4))
+dataset$own_telephone<-factor(dataset$own_telephone,levels=c('none', 'yes'),labels=c(0,1))
+dataset$foreign_worker<-factor(dataset$foreign_worker,levels=c('yes', 'no'),labels=c(1,0))
+dataset$class<-factor(dataset$class,levels=c('bad','good'),labels=c(0,1))
+
+summary(dataset)
+
+
+library(caret)
+library(rafalib)
+library(class)
+library(doParallel)
+set.seed(1)
+#model 1 -KNN classifier
+
+trControl <- trainControl(method  = "cv",
+                          number  = 10)
+str(dataset)
+fit <- train(class ~ .,
+             method     = "knn",
+             tuneGrid   = expand.grid(k = 1:10),
+             trControl  = trControl,
+             metric     = "confusion matrix",
+             data       = dataset)
+
+summary(fit$results)
+
+#k=7 is chosen as the optimum value of k (68.60% accuracy)
+#model 2
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+library(plyr)
+library(rpart)
+set.seed(123)
+
+dataset_tree=read.table(file="risk.txt",sep = ",",header = FALSE)
+
+#dataset_tree=as.matrix(dataset)
+names(dataset_tree)<-c("over_draft", 
+"credit_usage real",
+"credit_history", 
+"purpose",
+"current_balance real",
+"Average_Credit_Balance", 
+"employment",
+"location",
+"personal_status", 
+"other_parties", 
+"residence_since", 
+"property_magnitude", 
+"cc_age", 
+"other_payment_plans", 
+"housing", 
+"existing_credits", 
+"job",
+"num_dependents", 
+"own_telephone", 
+"foreign_worker", 
+"class"
+)
+#although trees can handle qualitative variables,we are creating dummy varables to scale the variables
+#which otherwise was causing problems because of their range.The categorical data was given dummy variable for simplicity also its required this way in rpart library
+dataset_tree$over_draft <- as.numeric(dataset_tree$over_draft)
+dataset_tree$credit_history <- as.numeric(dataset_tree$credit_history)
+dataset_tree$purpose <- as.numeric(dataset_tree$purpose)
+dataset_tree$Average_Credit_Balance <- as.numeric(dataset_tree$Average_Credit_Balance)
+dataset_tree$employment <- as.numeric(dataset_tree$employment)
+dataset_tree$location <- as.numeric(dataset_tree$location)
+dataset_tree$personal_status <- as.numeric(dataset_tree$personal_status)
+dataset_tree$other_parties <- as.numeric(dataset_tree$other_parties)
+dataset_tree$residence_since <- as.numeric(dataset_tree$residence_since)
+dataset_tree$property_magnitude <- as.numeric(dataset_tree$property_magnitude)
+dataset_tree$cc_age <- as.numeric(dataset_tree$cc_age)
+dataset_tree$other_payment_plans <- as.numeric(dataset_tree$other_payment_plans)
+dataset_tree$housing <- as.numeric(dataset_tree$housing)
+dataset_tree$existing_credits <- as.numeric(dataset_tree$existing_credits)
+dataset_tree$job <- as.numeric(dataset_tree$job)
+dataset_tree$num_dependents <- as.numeric(dataset_tree$num_dependents)
+dataset_tree$own_telephone <- as.numeric(dataset_tree$own_telephone)
+dataset_tree$foreign_worker <- as.numeric(dataset_tree$foreign_worker)
+dataset_tree$class <- as.numeric(dataset_tree$class)
+#dataset_tree$class <-as.factor(dataset_tree$class )
+dataset_tree<-as.data.frame(dataset_tree)
+str(dataset_tree)
+library(caTools)
+set.seed(personal)
+
+str(dataset_tree)
+
+split = sample.split(dataset_tree, SplitRatio = 0.85)
+training_set = as.data.frame(subset(dataset_tree, split == TRUE))
+test_set = as.data.frame(subset(dataset_tree, split == FALSE))
+training_set[,-21]=scale(training_set[,-21])
+test_set[,-21]=scale(test_set[,-21])
+library(caret)
+library(tree)
+library(rpart)
+# k fold crossvalidation is done 
+folds = createFolds(training_set$class, k = 10)
+cv = lapply(folds, function(x) {
+ training_fold = training_set[-x, ]
+test_fold = training_set[x, ]
+classifier = rpart(class~ . ,training_fold)
+y_pred = predict(classifier, newdata=test_fold[-21])
+
+  cm = table(test_fold[,21], y_pred)
+  accuracy = (cm[1,1] + cm[2,2]) / (cm[1,1] + cm[2,2] + cm[1,2] + cm[2,1])
+  return(accuracy)
+  return(cm)
+  return(y_pred)
+  return(classifier)
+})
+accuracy = mean(as.numeric(cv))
+accuracy#poor as the dataset set is not large as compared to # of predictors are a lot
+#this was expected because sime decision tree can be very non robust even after tryingvarious techniques like pruning.But using Random forest and bagging ,boosting should increase our accuracy
+
+#model 3 random forrest
+library(rfUtilities)
+library(randomForest)
+
+# For classification
+dataset_rftree=read.table(file="risk.txt",sep = ",",header = FALSE,stringsAsFactors = TRUE)
+
+#dataset_tree=as.matrix(dataset)
+names(dataset_rftree)<-c("over_draft", 
+"credit_usage",
+"credit_history", 
+"purpose",
+"current_balance",
+"Average_Credit_Balance", 
+"employment",
+"location",
+"personal_status", 
+"other_parties", 
+"residence_since", 
+"property_magnitude", 
+"cc_age", 
+"other_payment_plans", 
+"housing", 
+"existing_credits", 
+"job",
+"num_dependents", 
+"own_telephone", 
+"foreign_worker", 
+"class"
+)
+split = sample.split(dataset_rftree, SplitRatio = 0.75)
+training_set_rf = as.data.frame(subset(dataset_rftree, split == TRUE))
+test_set_rf = as.data.frame(subset(dataset_rftree, split == FALSE))
+#dataset_rftree<-as.data.frame(dataset_rftree)
+
+
+
+
+ #now we will do hypertuning with k fold repeated cross validation check.For Random forest mtry is the most important parameter .ntree is also a good candidate but we cannot do gridsearch for all the values as it will take a lot of time .The random forest takes care of most of it but i tried it with few different values and there was no subsataintial difference     
+  #   Create control function for training with 10 folds and keep 3 folds for training. search method is grid.
+control <- trainControl(method='repeatedcv', 
+                        number=10, 
+                        repeats=3, 
+                        search='grid')
+#create tunegrid with 20 values from 1:20 for mtry to tunning model. Our train function will change number of entry variable at each split according to tunegrid.
+#this will take time
+tunegrid <- expand.grid(.mtry = (1:20)) 
+
+rf_gridsearch <- train(class ~ ., 
+                       data = dataset_rftree,
+                       method = 'rf',
+                       metric = 'Accuracy',
+                       tuneGrid = tunegrid)
+print(rf_gridsearch)
+plot(rf_gridsearch)
+#mtry=20(it might change because of random seed) is selected i.e. all of our predictors which means best model is chosen using bagging(75% accuracy(approx)) and this also means predictors are highly uncorellated
+#final model
+rf = randomForest(class ~ .,  
+                   data = training_set_rf,
+                  mtry=20
+                  )
+rf
+y_pred = predict(rf, newdata = test_set_rf[-21], type ='class')
+cm = table(test_set_rf[, 21], y_pred)
+cm
+plot(rf)  
+importance(rf)
+best_classification_accuracy = (cm[1,1] + cm[2,2]) / (cm[1,1] + cm[2,2] + cm[1,2] + cm[2,1])
+best_classification_accuracy
+
+#model 4(this model is the best accoring to me)
+# as we saw better results for random forrest equivalent to boosting.we will at last try it for boosting
+dataset_boost=read.table(file="risk.txt",sep = ",",header = FALSE,stringsAsFactors = TRUE)
+names(dataset_boost)<-c("over_draft", 
+"credit_usage",
+"credit_history", 
+"purpose",
+"current_balance",
+"Average_Credit_Balance", 
+"employment",
+"location",
+"personal_status", 
+"other_parties", 
+"residence_since", 
+"property_magnitude", 
+"cc_age", 
+"other_payment_plans", 
+"housing", 
+"existing_credits", 
+"job",
+"num_dependents", 
+"own_telephone", 
+"foreign_worker", 
+"class"
+)
+
+ dataset_boost$class<-as.numeric(dataset_boost$class)
+
+dataset_boost$class <- (dataset_boost$class -1)
+split = sample.split(dataset_boost, SplitRatio = 0.75)
+training_set_boost = subset(dataset_boost, split == TRUE)
+test_set_boost = subset(dataset_boost, split == FALSE)
+#we will start by cross validation with default parametrs to check whether it is worth moving forward with this model
+boost.myData<-gbm(class~.,data=training_set_boost,distribution="bernoulli",n.trees=1000,interaction.depth=4,shrinkage = 0.07)
+  pred.boost<-predict(boost.myData,newdata=test_set_boost,n.trees=1000)
+#  pred.boost
+predict_class <- pred.boost > 0.5
+predict_class<-as.numeric(predict_class)
+#predict_class
+cm1<-table(test_set_boost[, 21], predict_class)
+boost_accuracy = (cm1[1,1] + cm1[2,2]) / (cm1[1,1] + cm1[2,2] + cm1[1,2] + cm1[2,1])
+boost_accuracy
+cm1
+# now we will do hypertuning
+
+
+
+
+# lambdas = seq( 0, 0.5, by=0.05 )
+# train.errors = rep(NA, length(lambdas))
+# test.errors = rep(NA, length(lambdas))
+# for (i in 1:length(lambdas)) {
+#     boost.fraud = gbm(class ~ ., data =training_set_boost, distribution = "bernoulli", 
+#         n.trees = 1000, shrinkage = lambdas[i])
+#     boost.predict = predict(boost.fraud, test_set_boost[-21], n.trees = 1000)
+#     predict_class[i] <- boost.predict > 0.5
+#     predict_class[i]<-as.numeric(predict_class[i])
+#     a = predict_class[i]
+#     cm1<-table(as.matrix(test_set_boost[, 21], a))
+#     boost_accuracy[i] = (cm1[1,1] + cm1[2,2]) / (cm1[1,1] + cm1[2,2] + cm1[1,2] +cm1[2,1])
+#     boost_accuracy[i]
+#     cm1[i]
+#     return(boost.predict)
+#     
+# }
+
+
+library(caret)
+library(gbm)
+#library(hydroGOF)
+#library(Metrics)
+
+
+# Using caret with the default grid to optimize tune parameters automatically
+# GBM Tuning parameters:
+# n.trees (# Boosting Iterations)
+# interaction.depth (Max Tree Depth)
+# shrinkage (Shrinkage)
+# n.minobsinnode (Min. Terminal Node Size)
+
+metric <- "Accuracy"
+trainControl <- trainControl(method="cv", number=10)
+
+set.seed(99)
+gbm.caret <- train(class ~ .
+                   , data=dataset
+                   , distribution="bernoulli"
+                   , method="gbm"
+                   , trControl=trainControl
+                   , verbose=FALSE
+                  #, tuneGrid=caretGrid
+                   , metric=metric
+                   , bag.fraction=0.75
+                   )                  
+
+print(gbm.caret)
+
+boost.myData<-gbm(class~.,data=training_set_boost,distribution="bernoulli",n.trees=150,interaction.depth=2,shrinkage = 0.1,n.minobsinnode = 10)
+  pred.boost<-predict(boost.myData,newdata=test_set_boost,n.trees=150)
+predict_class <- pred.boost > 0.5
+predict_class<-as.numeric(predict_class)
+#predict_class
+cm1<-table(test_set_boost[, 21], predict_class)
+boost_accuracy = (cm1[1,1] + cm1[2,2]) / (cm1[1,1] + cm1[2,2] + cm1[1,2] + cm1[2,1])
+boost_accuracy
+cm1
+#our accuracy is less but false positive is lesser than random forest (bagging).As this is fraud classification datset we will choose a model with less false positive and alsmost similar accuracy.Still opinions might differ for different needs
+```
+#Question 4:
+
+(Based on ISLR Chapter 9 #7) In this problem, you will use support vector approaches in order to
+predict whether a given car gets high or low gas mileage based on the
+Auto
+data set.
+
+##(a)
+Create a binary variable that takes on a 1 for cars with gas mileage above the median, and a 0 for cars with gas mileage below the median.
+
+
+##(b)
+Fit a support vector classifier to the data with various values of cost, in order to predict whether a car gets high or low gas mileage. Report the cross-validation errors associated with different values of this parameter. Comment on your results.
+
+##(c)
+Now repeat for (b), this time using SVMs with radial and polynomial basis kernels, with different values of gamma and degree and cost. Comment on your results.
+
+##(d)
+Make some plots to back up your assertions in (b) and (c). Hint: In the lab, we used the plot() function for svm objects only in cases with p=2 When p>2,you can use the plot() function to create plots displaying pairs of variables at a time. Essentially, instead of typing plot(svmfit , dat) where svmfit contains your fitted model and dat is a data frame containing your data, you can type plot(svmfit , dat, x1~x4) in order to plot just the first and fourth variables. However, you must replace x1 and x4 with the correct variable names. To find out more, type ?plot.svm.
+
+```{r}
+#a
+library(ISLR)
+attach(Auto)
+#To make a binary variable 
+median_mileage = median(Auto$mpg) 
+binary = ifelse(Auto$mpg > median_mileage, 1, 0) 
+Auto$highMpg = as.factor(binary)
+
+Auto=Auto[,-9]#names not needed but we can add it as well which should severely effect our model
+
+#b
+library(e1071)
+#set.seed(personal)
+cost = c(0.01, 0.05, 0.1, 0.5, 1, 10, 50, 100)
+cost_factor = as.factor(cost)
+tune.out.linear = tune(svm, highMpg~., data = Auto, kernel = "linear", ranges = list(cost = cost))
+a<-summary(tune.out.linear)
+print(a$best.parameters)
+plot(as.numeric(cost_factor), tune.out.linear$performances$error, type = "b", xaxt = "n", xlab = "Cost", ylab = "Cross-validation Error")
+axis(1, at = 1:length(cost), labels = as.character(cost))
+
+#c
+#tuning of degrees and cost for poly kernel
+tune.out.poly = tune(svm, highMpg~., data = Auto, kernel = "polynomial", ranges = list(cost = cost, degree = seq(1:8)))
+b<-summary(tune.out.poly)
+print(b$best.parameters)
+#tuning of degree and cost for radial kernel tells us that the data is somewhat linearly seperable and it is similar to support vector classifier
+tune.out.rad = tune(svm, highMpg~., data = Auto, kernel = "radial", ranges = list(cost = cost, gamma = c(0.5,1,2,3,4)))
+c<-summary(tune.out.rad)
+
+print(c$best.parameters)
+#gamma value also tells us that the data is seperable
+
+
+
+svm.linear = svm(highMpg ~ ., data = Auto, kernel = "linear", cost =a$best.parameters )
+svm.poly = svm(highMpg ~ ., data = Auto, kernel = "polynomial", cost = b$best.parameters[,1], 
+    degree = b$best.parameters[,2])
+svm.radial = svm(highMpg ~ ., data = Auto, kernel = "radial", cost = c$best.parameters, gamma = c$best.parameters)
+plottings = function(fitting) { 
+  for (i in names(Auto)[!(names(Auto) %in% c("mpg", "highMpg", "name"))]) { 
+    plot(fitting, Auto, as.formula(paste("mpg~", i, sep = ""))) } } 
+plottings(svm.linear)
+
+# plots show good seperation between data
+
+```
+
