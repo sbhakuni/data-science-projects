@@ -1,5 +1,9 @@
 
-
+"""This file is part of a ongoing research project . 
+Here, I have used classification techniques with addition to NLP techniques to predict the current credit rating of a company provided by S&P.
+We will use balance sheet data and 10K form text data for our findings. 
+We tried the methodologies for all sectors separately and found out that addition of 10K text data resulted in significant improvement in financial sector 
+which on further analysis was figured out that the financial sector had slightly different 10K structure than other sectors,thus it was most beneficial in it."""
 import pandas as pd
 import numpy as np
 import nltk
